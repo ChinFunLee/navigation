@@ -847,19 +847,20 @@ namespace move_base {
       latest_plan_ = temp_plan;
       lock.unlock();
       ROS_DEBUG_NAMED("move_base","pointers swapped!");
+      if(!controller_plan_->empty()) {
+          if(!tc_->setPlan(*controller_plan_)){
+          //ABORT and SHUTDOWN COSTMAPS
+          ROS_ERROR("Failed to pass global plan to the controller, aborting.");
+          resetState();
 
-      if(!tc_->setPlan(*controller_plan_)){
-        //ABORT and SHUTDOWN COSTMAPS
-        ROS_ERROR("Failed to pass global plan to the controller, aborting.");
-        resetState();
+          //disable the planner thread
+          lock.lock();
+          runPlanner_ = false;
+          lock.unlock();
 
-        //disable the planner thread
-        lock.lock();
-        runPlanner_ = false;
-        lock.unlock();
-
-        as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to pass global plan to the controller.");
-        return true;
+          as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to pass global plan to the controller.");
+          return true;
+        }
       }
 
       //make sure to reset recovery_index_ since we were able to find a valid plan
@@ -1154,6 +1155,7 @@ namespace move_base {
     recovery_index_ = 0;
     recovery_trigger_ = PLANNING_R;
     publishZeroVelocity();
+    controller_plan_->clear();
 
     //if we shutdown our costmaps when we're deactivated... we'll do that now
     if(shutdown_costmaps_){
